@@ -376,32 +376,12 @@ detect_parser = subparsers.add_parser(
 
 detect_parser.add_argument(
 
-    "-o",
-    "--original",
+    "-f",
+    "--file",
 
     required=True,
 
     help="Original payload file"
-)
-
-detect_parser.add_argument(
-
-    "-b",
-    "--obfuscated",
-
-    required=True,
-
-    help="Obfuscated payload file"
-)
-
-detect_parser.add_argument(
-
-    "-e",
-    "--encoded",
-
-    required=True,
-
-    help="Encoded payload file"
 )
 
 detect_parser.add_argument(
@@ -475,7 +455,12 @@ def main():
             args.output
             or f"{args.method}_encoded.txt"
         )
+        original_name = Path(args.file).stem
 
+        output_name = (
+            args.output
+            or f"{original_name}_{args.method}_encoded.txt"
+        )
         save_file(
             settings.ENCODED_DIR,
             output_name,
@@ -549,7 +534,12 @@ def main():
             args.output
             or f"{args.method}_obfuscated.txt"
         )
+        original_name = Path(args.file).stem
 
+        output_name = (
+            args.output
+            or f"{original_name}_{args.method}_obfuscated.txt"
+        )
         save_file(
             settings.OBFUSCATED_DIR,
             output_name,
@@ -591,18 +581,55 @@ def main():
     # DETECT
     # =================================================
 
+       # =================================================
+    # DETECT
+    # =================================================
+
     elif args.command == "detect":
 
         original_payload = load_file(
-            args.original
+            args.file
+        )
+
+        original_name = Path(args.file).stem
+
+        encoded_dir = Path(settings.ENCODED_DIR)
+        obfuscated_dir = Path(settings.OBFUSCATED_DIR)
+
+        encoded_file = next(
+
+            encoded_dir.glob(
+                f"{original_name}*encoded*"
+            ),
+
+            None
+        )
+
+        obfuscated_file = next(
+
+            obfuscated_dir.glob(
+                f"{original_name}*obfuscated*"
+            ),
+
+            None
+        )
+
+        if not encoded_file:
+
+            error("\n[!] Encoded file not found")
+            exit()
+
+        if not obfuscated_file:
+
+            error("\n[!] Obfuscated file not found")
+            exit()
+
+        encoded_payload = load_file(
+            encoded_file
         )
 
         obfuscated_payload = load_file(
-            args.obfuscated
-        )
-
-        encoded_payload = load_file(
-            args.encoded
+            obfuscated_file
         )
 
         if (
@@ -613,16 +640,16 @@ def main():
 
             exit()
 
-        results = compare_payloads( # type: ignore
+        results = compare_payloads(
 
             original_payload,
 
             obfuscated_payload,
 
             encoded_payload
-        ) 
+        )
 
-        report = generate_comparison_report( # type: ignore
+        report = generate_comparison_report(
             results
         )
 
@@ -639,7 +666,6 @@ def main():
             report_name,
             report
         )
-
     # =================================================
     # NO ARGUMENTS
     # =================================================
