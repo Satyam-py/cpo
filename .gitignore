@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+encoded/
+decoded/
+obfuscated/
+deobfuscated/
+reports/
+
+build/
+dist/
+*.egg-info/
