@@ -4,7 +4,7 @@ from datetime import datetime
 
 from colorama import Fore, init
 
-from cpo.Detector.detector import compare_payloads
+from cpo.Detector.detector import compare_payloads # type: ignore
 from cpo import settings # type: ignore
 
 from cpo.Encoders.base64_encoder import *# type: ignore
@@ -678,7 +678,7 @@ def main():
         encoded_file=encoded_file.name
         )
 
-        report = generate_comparison_report(
+        report = generate_comparison_report( # type: ignore
             results
         )   
 
