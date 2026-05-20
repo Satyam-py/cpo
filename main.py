@@ -4,6 +4,7 @@ from datetime import datetime
 
 from colorama import Fore, init
 
+from cpo.Detector.detector import compare_payloads
 from cpo import settings # type: ignore
 
 from cpo.Encoders.base64_encoder import *# type: ignore
@@ -596,23 +597,45 @@ def main():
         encoded_dir = Path(settings.ENCODED_DIR)
         obfuscated_dir = Path(settings.OBFUSCATED_DIR)
 
-        encoded_file = next(
+        encoded_matches = list(
 
             encoded_dir.glob(
                 f"{original_name}*encoded*"
-            ),
-
-            None
+            )
         )
 
-        obfuscated_file = next(
+        if encoded_matches:
+
+            encoded_file = max(
+
+                encoded_matches,
+
+                key=lambda f: f.stat().st_mtime
+            )
+
+        else:
+
+            encoded_file = None
+
+        obfuscated_matches = list(
 
             obfuscated_dir.glob(
                 f"{original_name}*obfuscated*"
-            ),
-
-            None
+            )
         )
+
+        if obfuscated_matches:
+
+            obfuscated_file = max(
+
+                obfuscated_matches,
+
+                key=lambda f: f.stat().st_mtime
+            )
+
+        else:
+
+            obfuscated_file = None
 
         if not encoded_file:
 
@@ -642,16 +665,22 @@ def main():
 
         results = compare_payloads(
 
-            original_payload,
+        original_payload,
 
-            obfuscated_payload,
+        obfuscated_payload,
 
-            encoded_payload
+        encoded_payload,
+
+        original_file=args.file,
+
+        obfuscated_file=obfuscated_file.name,
+
+        encoded_file=encoded_file.name
         )
 
         report = generate_comparison_report(
             results
-        )
+        )   
 
         print("\n")
         print(report)

@@ -1,6 +1,81 @@
 import re
+import math
+from collections import Counter
+from pathlib import Path
 
 from cpo.Detector.signature import * # type: ignore
+
+
+# =====================================================
+# SHANNON ENTROPY
+# =====================================================
+
+def calculate_entropy(data):
+
+    if not data:
+        return 0
+
+    counter = Counter(data)
+
+    length = len(data)
+
+    entropy = 0
+
+    for count in counter.values():
+
+        probability = count / length
+
+        entropy -= probability * math.log2(probability)
+
+    return round(entropy, 2)
+
+
+# =====================================================
+# SUSPICIOUS CHARACTER ANALYSIS
+# =====================================================
+
+def suspicious_char_ratio(payload):
+
+    suspicious_chars = r"[@#$%^&*(){}\\|<>]"
+
+    matches = re.findall(
+        suspicious_chars,
+        payload
+    )
+
+    if not payload:
+        return 0
+
+    ratio = (
+        len(matches) / len(payload)
+    ) * 100
+
+    return round(ratio, 2)
+
+
+# =====================================================
+# STRING FRAGMENTATION DETECTION
+# =====================================================
+
+def detect_fragmentation(payload):
+
+    fragmentation_patterns = [
+
+        r'"\s*\+\s*"',      # "ab" + "cd"
+        r"'\s*\+\s*'",      # 'ab' + 'cd'
+        r"\\x[0-9a-fA-F]{2}",
+        r"\\u[0-9a-fA-F]{4}"
+    ]
+
+    matches = 0
+
+    for pattern in fragmentation_patterns:
+
+        matches += len(
+            re.findall(pattern, payload)
+        )
+
+    return matches
 
 
 # =====================================================
@@ -12,6 +87,8 @@ def scan_payload(payload):
     exact_matches = []
 
     regex_matches = []
+
+    analysis_notes = []
 
     # =================================================
     # EXACT SIGNATURE MATCHING
@@ -38,39 +115,98 @@ def scan_payload(payload):
             regex_matches.append(name)
 
     # =================================================
+    # ADVANCED ANALYSIS
+    # =================================================
+
+    entropy = calculate_entropy(payload)
+
+    fragmentation_score = detect_fragmentation(
+        payload
+    )
+
+    suspicious_ratio = suspicious_char_ratio(
+        payload
+    )
+
+    payload_size = len(payload)
+
+    # =================================================
+    # ANALYSIS NOTES
+    # =================================================
+
+    if entropy >= 4.5:
+
+        analysis_notes.append(
+            "High entropy detected "
+            "(possible encoding/encryption)"
+        )
+
+    if fragmentation_score >= 2:
+
+        analysis_notes.append(
+            "String fragmentation patterns found"
+        )
+
+    if suspicious_ratio >= 5:
+
+        analysis_notes.append(
+            "High suspicious character ratio"
+        )
+
+    if payload_size >= 5000:
+
+        analysis_notes.append(
+            "Large payload size"
+        )
+
+    # =================================================
     # TOTAL MATCHES
     # =================================================
 
     total_matches = (
+
         len(exact_matches)
+
         + len(regex_matches)
+
+        + fragmentation_score
     )
 
     # =================================================
     # DETECTION STATUS
     # =================================================
 
-    detection_status = (
-        "DETECTED"
-        if total_matches > 0
-        else "BYPASSED"
-    )
+    if total_matches == 0:
+
+        detection_status = "BYPASSED"
+
+    elif total_matches <= 2:
+
+        detection_status = "PARTIALLY DETECTED"
+
+    else:
+
+        detection_status = "DETECTED"
 
     # =================================================
     # RISK LEVEL
     # =================================================
 
-    risk_level = "Unknown"
+    if total_matches >= 6:
 
-    for threshold, level in sorted(
-        RISK_LEVELS.items(), # type: ignore
-        reverse=True
-    ):
+        risk_level = "Critical"
 
-        if total_matches >= threshold:
+    elif total_matches >= 4:
 
-            risk_level = level
-            break
+        risk_level = "High"
+
+    elif total_matches >= 2:
+
+        risk_level = "Medium"
+
+    else:
+
+        risk_level = "Low"
 
     # =================================================
     # RETURN RESULTS
@@ -86,6 +222,16 @@ def scan_payload(payload):
 
         "regex_matches": regex_matches,
 
+        "analysis_notes": analysis_notes,
+
+        "entropy": entropy,
+
+        "fragmentation_score": fragmentation_score,
+
+        "suspicious_ratio": suspicious_ratio,
+
+        "payload_size": payload_size,
+
         "total_matches": total_matches
     }
 
@@ -98,27 +244,42 @@ def compare_payloads(
 
     original_payload,
     obfuscated_payload,
-    encoded_payload
+    encoded_payload,
+
+    original_file,
+    obfuscated_file,
+    encoded_file
 
 ):
 
     results = {
 
-        "Original Payload":
-            scan_payload(original_payload),
+        "Original Payload": {
 
-        "Obfuscated Payload":
-            scan_payload(obfuscated_payload),
+            "file_name": Path(original_file).name,
 
-        "Encoded Payload":
-            scan_payload(encoded_payload)
+            **scan_payload(original_payload)
+        },
+
+        "Obfuscated Payload": {
+
+            "file_name": obfuscated_file,
+
+            **scan_payload(obfuscated_payload)
+        },
+
+        "Encoded Payload": {
+
+            "file_name": encoded_file,
+
+            **scan_payload(encoded_payload)
+        }
     }
-
     return results
 
 
 # =====================================================
-# GENERATE COMPARATIVE REPORT
+# GENERATE REPORT
 # =====================================================
 
 def generate_comparison_report(results):
@@ -126,19 +287,19 @@ def generate_comparison_report(results):
     report = []
 
     report.append(
-        "========================================"
+        "=" * 60
     )
 
     report.append(
-        " Comparative Detection Report"
+        "        CPO Comparative Detection Report"
     )
 
     report.append(
-        "========================================\n"
+        "=" * 60 + "\n"
     )
 
     # =================================================
-    # EACH PAYLOAD RESULT
+    # PAYLOAD RESULTS
     # =================================================
 
     for payload_type, data in results.items():
@@ -148,55 +309,91 @@ def generate_comparison_report(results):
         )
 
         report.append(
+            f"File Name      : "
+            f"{data['file_name']}"
+        )
+        report.append(
             "-" * len(payload_type)
         )
 
         report.append(
-            f"Detection Status: "
-            f"{data['status']}"
+            f"Detection Status : {data['status']}"
         )
 
         report.append(
-            f"Risk Level: "
-            f"{data['risk']}"
+            f"Risk Level      : {data['risk']}"
         )
 
         report.append(
-            f"Total Matches: "
-            f"{data['total_matches']}"
+            f"Total Matches   : {data['total_matches']}"
+        )
+
+        report.append(
+            f"Entropy Score   : {data['entropy']}"
+        )
+
+        report.append(
+            f"Fragmentation   : "
+            f"{data['fragmentation_score']}"
+        )
+
+        report.append(
+            f"Suspicious Ratio: "
+            f"{data['suspicious_ratio']}%"
+        )
+
+        report.append(
+            f"Payload Size    : "
+            f"{data['payload_size']} bytes"
         )
 
         # =============================================
         # EXACT MATCHES
         # =============================================
 
-        report.append("\nExact Matches:")
+        report.append("\n[ Exact Matches ]")
 
         if data["exact_matches"]:
 
             for match in data["exact_matches"]:
 
-                report.append(f"- {match}")
+                report.append(f"  - {match}")
 
         else:
 
-            report.append("None")
+            report.append("  None")
 
         # =============================================
         # REGEX MATCHES
         # =============================================
 
-        report.append("\nRegex Matches:")
+        report.append("\n[ Regex Matches ]")
 
         if data["regex_matches"]:
 
             for match in data["regex_matches"]:
 
-                report.append(f"- {match}")
+                report.append(f"  - {match}")
 
         else:
 
-            report.append("None")
+            report.append("  None")
+
+        # =============================================
+        # ANALYSIS NOTES
+        # =============================================
+
+        report.append("\n[ Analysis Notes ]")
+
+        if data["analysis_notes"]:
+
+            for note in data["analysis_notes"]:
+
+                report.append(f"  - {note}")
+
+        else:
+
+            report.append("  None")
 
         report.append("\n")
 
@@ -205,61 +402,74 @@ def generate_comparison_report(results):
     # =================================================
 
     report.append(
-        "========================================"
+        "=" * 60
     )
 
     report.append(
-        " Evasion Insights"
+        "               Evasion Insights"
     )
 
     report.append(
-        "========================================\n"
+        "=" * 60 + "\n"
     )
 
-    original_detected = (
-        results["Original Payload"]["status"]
-        == "DETECTED"
-    )
-
-    obfuscated_bypassed = (
-        results["Obfuscated Payload"]["status"]
-        == "BYPASSED"
-    )
-
-    encoded_bypassed = (
-        results["Encoded Payload"]["status"]
-        == "BYPASSED"
-    )
-
-    if original_detected:
-
-        report.append(
-            "- Original payload triggered "
-            "static signature detection."
-        )
-
-    if obfuscated_bypassed:
-
-        report.append(
-            "- Obfuscation reduced visible "
-            "signature patterns."
-        )
-
-    if encoded_bypassed:
-
-        report.append(
-            "- Encoding hid suspicious "
-            "readable strings."
-        )
+    original = results["Original Payload"]
+    obfuscated = results["Obfuscated Payload"]
+    encoded = results["Encoded Payload"]
 
     if (
-        not obfuscated_bypassed
-        and not encoded_bypassed
+
+        obfuscated["total_matches"]
+        < original["total_matches"]
+
     ):
 
         report.append(
-            "- Transformations were not "
-            "sufficient to bypass detection."
+            "- Obfuscation reduced "
+            "detectable signatures."
+        )
+
+    else:
+
+        report.append(
+            "- Obfuscation did not "
+            "significantly reduce detection."
+        )
+
+    if (
+
+        encoded["entropy"]
+        > original["entropy"]
+
+    ):
+
+        report.append(
+            "- Encoding increased "
+            "payload entropy."
+        )
+
+    if (
+
+        obfuscated["fragmentation_score"]
+        > 0
+
+    ):
+
+        report.append(
+            "- Obfuscation introduced "
+            "fragmented string patterns."
+        )
+
+    if (
+
+        encoded["status"] == "BYPASSED"
+        or obfuscated["status"] == "BYPASSED"
+
+    ):
+
+        report.append(
+            "- One or more payloads bypassed "
+            "basic signature analysis."
         )
 
     report.append("\n")
